@@ -3,8 +3,11 @@ import javax.swing.Timer;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -27,7 +30,9 @@ public class GamePanel extends JPanel {
     private boolean gameOver = false;
 
     private final List<Zombie> zombies = new ArrayList<>();
+    private final List<Bullet> bullets = new ArrayList<>();
     private int tickCount = 0;
+    private int score = 0;
 
     public GamePanel() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -39,6 +44,14 @@ public class GamePanel extends JPanel {
             @Override public void keyReleased(KeyEvent e) { keysDown.remove(e.getKeyCode()); }
         });
 
+        addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                if (!gameOver) {
+                    shoot(e.getX(), e.getY());
+                }
+            }
+        });
+
         timer = new Timer(16, e -> {
             update();
             repaint();
@@ -47,6 +60,12 @@ public class GamePanel extends JPanel {
 
     public void start() {
         timer.start();
+    }
+
+    private void shoot(double targetX, double targetY) {
+        double startX = playerX + playerSize / 2.0;
+        double startY = playerY + playerSize / 2.0;
+        bullets.add(new Bullet(startX, startY, targetX, targetY));
     }
 
     private void update() {
@@ -72,8 +91,36 @@ public class GamePanel extends JPanel {
             }
         }
 
+        updateBullets();
+
+        int before = zombies.size();
+        zombies.removeIf(Zombie::isDead);
+        score += (before - zombies.size()) * 10;
+
         if (playerHealth <= 0) {
             gameOver = true;
+        }
+    }
+
+    private void updateBullets() {
+        Iterator<Bullet> it = bullets.iterator();
+        while (it.hasNext()) {
+            Bullet b = it.next();
+            b.update();
+
+            if (b.isOffscreen()) {
+                it.remove();
+                continue;
+            }
+
+            for (Zombie z : zombies) {
+                Rectangle zombieBox = new Rectangle((int) z.getX(), (int) z.getY(), 22, 22);
+                if (zombieBox.contains(b.getX(), b.getY())) {
+                    z.takeDamage(b.getDamage());
+                    it.remove();
+                    break;
+                }
+            }
         }
     }
 
@@ -116,12 +163,16 @@ public class GamePanel extends JPanel {
             z.draw(g2);
         }
 
+        for (Bullet b : bullets) {
+            b.draw(g2);
+        }
+
         g2.setColor(new Color(60, 140, 255));
         g2.fillRect((int) playerX, (int) playerY, playerSize, playerSize);
 
         g2.setColor(Color.WHITE);
-        g2.drawString("Move: W A S D", 10, 20);
-        g2.drawString("Zombies: " + zombies.size(), 10, 38);
+        g2.drawString("Move: W A S D   Shoot: mouse click", 10, 20);
+        g2.drawString("Zombies: " + zombies.size() + "   Score: " + score, 10, 38);
 
         g2.setColor(Color.DARK_GRAY);
         g2.fillRect(10, 50, 150, 14);
