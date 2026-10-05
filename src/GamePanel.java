@@ -32,7 +32,7 @@ public class GamePanel extends JPanel {
     private boolean gameOver = false;
     private boolean gameWon = false;
 
-    private final Inventory inventory = new Inventory();
+    private Inventory inventory = new Inventory();
 
     private final List<Zombie> zombies = new ArrayList<>();
     private final List<Bullet> bullets = new ArrayList<>();
@@ -50,10 +50,7 @@ public class GamePanel extends JPanel {
         setBackground(new Color(30, 30, 30));
         setFocusable(true);
 
-        inventory.add(new Weapon("Pistol", 25, 12, 80));
-        inventory.add(new Weapon("Rifle", 50, 30, 40));
-        inventory.add(new MedKit(40));
-        inventory.add(new MedKit(40));
+        setupInventory();
 
         addKeyListener(new KeyAdapter() {
             @Override public void keyPressed(KeyEvent e) {
@@ -62,6 +59,9 @@ public class GamePanel extends JPanel {
                 if (firstPress && !gameOver && !gameWon) {
                     if (code == KeyEvent.VK_E) inventory.nextWeapon();
                     if (code == KeyEvent.VK_H) useMedKit();
+                }
+                if (firstPress && (gameOver || gameWon) && code == KeyEvent.VK_R) {
+                    restartGame();
                 }
             }
             @Override public void keyReleased(KeyEvent e) { keysDown.remove(e.getKeyCode()); }
@@ -81,6 +81,31 @@ public class GamePanel extends JPanel {
             update();
             repaint();
         });
+    }
+
+    private void setupInventory() {
+        inventory = new Inventory();
+        inventory.add(new Weapon("Pistol", 25, 12, 80));
+        inventory.add(new Weapon("Rifle", 50, 30, 40));
+        inventory.add(new MedKit(40));
+        inventory.add(new MedKit(40));
+    }
+
+    private void restartGame() {
+        playerX = WIDTH / 2.0;
+        playerY = HEIGHT / 2.0;
+        playerHealth = MAX_HEALTH;
+        damageCooldown = 0;
+        shootCooldown = 0;
+        gameOver = false;
+        gameWon = false;
+        zombies.clear();
+        bullets.clear();
+        score = 0;
+        waveNumber = 1;
+        breakTimer = 0;
+        setupInventory();
+        startWave();
     }
 
     public void start() {
@@ -313,12 +338,16 @@ public class GamePanel extends JPanel {
             g2.setFont(new Font("SansSerif", Font.PLAIN, 22));
             g2.setColor(Color.WHITE);
             g2.drawString("Final score: " + score, WIDTH / 2 - 70, HEIGHT / 2 + 40);
+            g2.drawString("Press R to restart", WIDTH / 2 - 85, HEIGHT / 2 + 70);
         }
 
         if (gameOver) {
             g2.setFont(new Font("SansSerif", Font.BOLD, 48));
             g2.setColor(Color.RED);
             g2.drawString("GAME OVER", WIDTH / 2 - 130, HEIGHT / 2);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 22));
+            g2.setColor(Color.WHITE);
+            g2.drawString("Press R to restart", WIDTH / 2 - 85, HEIGHT / 2 + 40);
         }
     }
 }
