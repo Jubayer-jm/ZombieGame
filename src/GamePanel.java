@@ -15,6 +15,7 @@ import java.util.Set;
 public class GamePanel extends JPanel {
     public static final int WIDTH = 800;
     public static final int HEIGHT = 600;
+    private static final int MAX_HEALTH = 100;
 
     private final Set<Integer> keysDown = new HashSet<>();
     private final Timer timer;
@@ -25,10 +26,13 @@ public class GamePanel extends JPanel {
     private final int playerSize = 24;
     private final double playerSpeed = 4;
 
-    private int playerHealth = 100;
+    private int playerHealth = MAX_HEALTH;
     private int damageCooldown = 0;
+    private int shootCooldown = 0;
     private boolean gameOver = false;
     private boolean gameWon = false;
+
+    private final Inventory inventory = new Inventory();
 
     private final List<Zombie> zombies = new ArrayList<>();
     private final List<Bullet> bullets = new ArrayList<>();
@@ -46,8 +50,20 @@ public class GamePanel extends JPanel {
         setBackground(new Color(30, 30, 30));
         setFocusable(true);
 
+        inventory.add(new Weapon("Pistol", 25, 12, 80));
+        inventory.add(new Weapon("Rifle", 50, 30, 40));
+        inventory.add(new MedKit(40));
+        inventory.add(new MedKit(40));
+
         addKeyListener(new KeyAdapter() {
-            @Override public void keyPressed(KeyEvent e)  { keysDown.add(e.getKeyCode()); }
+            @Override public void keyPressed(KeyEvent e) {
+                int code = e.getKeyCode();
+                boolean firstPress = keysDown.add(code);
+                if (firstPress && !gameOver && !gameWon) {
+                    if (code == KeyEvent.VK_E) inventory.nextWeapon();
+                    if (code == KeyEvent.VK_H) useMedKit();
+                }
+            }
             @Override public void keyReleased(KeyEvent e) { keysDown.remove(e.getKeyCode()); }
         });
 
@@ -80,9 +96,31 @@ public class GamePanel extends JPanel {
     }
 
     private void shoot(double targetX, double targetY) {
+        Weapon weapon = inventory.getCurrentWeapon();
+        if (weapon == null || !weapon.hasAmmo() || shootCooldown > 0) {
+            return;
+        }
         double startX = playerX + playerSize / 2.0;
         double startY = playerY + playerSize / 2.0;
-        bullets.add(new Bullet(startX, startY, targetX, targetY));
+        bullets.add(new Bullet(startX, startY, targetX, targetY, weapon.getDamage()));
+        weapon.useAmmo();
+        shootCooldown = weapon.getCooldownTicks();
+    }
+
+    private void useMedKit() {
+        if (playerHealth < MAX_HEALTH && inventory.getMedKitCount() > 0) {
+            MedKit kit = inventory.takeMedKit();
+            if (kit != null) {
+                playerHealth = Math.min(MAX_HEALTH, playerHealth + kit.getHealAmount());
+            }
+        }
+    }
+
+    private void giveWaveReward() {
+        for (Weapon w : inventory.getWeapons()) {
+            w.addAmmo(15);
+        }
+        inventory.add(new MedKit(40));
     }
 
     private void update() {
@@ -92,6 +130,7 @@ public class GamePanel extends JPanel {
         updateWave();
 
         if (damageCooldown > 0) damageCooldown--;
+        if (shootCooldown > 0) shootCooldown--;
 
         for (Zombie z : zombies) {
             z.update();
@@ -142,6 +181,7 @@ public class GamePanel extends JPanel {
             if (waveNumber >= Wave.FINAL_WAVE) {
                 gameWon = true;
             } else {
+                giveWaveReward();
                 breakTimer = 180;
             }
         }
@@ -234,8 +274,9 @@ public class GamePanel extends JPanel {
         g2.setColor(new Color(60, 140, 255));
         g2.fillRect((int) playerX, (int) playerY, playerSize, playerSize);
 
+        g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
         g2.setColor(Color.WHITE);
-        g2.drawString("Move: W A S D   Shoot: mouse click", 10, 20);
+        g2.drawString("Move: WASD   Shoot: click   Switch weapon: E   Heal: H", 10, 20);
 
         String waveText = "Wave: " + waveNumber;
         if (waveNumber >= Wave.FINAL_WAVE) waveText += " (BOSS WAVE)";
@@ -245,14 +286,24 @@ public class GamePanel extends JPanel {
         g2.setColor(Color.DARK_GRAY);
         g2.fillRect(10, 50, 150, 14);
         g2.setColor(new Color(220, 50, 50));
-        g2.fillRect(10, 50, playerHealth * 150 / 100, 14);
+        g2.fillRect(10, 50, playerHealth * 150 / MAX_HEALTH, 14);
         g2.setColor(Color.WHITE);
         g2.drawString("HP: " + playerHealth, 170, 62);
 
+        Weapon weapon = inventory.getCurrentWeapon();
+        if (weapon != null) {
+            String ammoText = weapon.getName() + "   Ammo: " + weapon.getAmmo();
+            if (!weapon.hasAmmo()) ammoText += "  (EMPTY - press E)";
+            g2.drawString(ammoText, 10, 82);
+        }
+        g2.drawString("MedKits: " + inventory.getMedKitCount(), 10, 100);
+
         if (breakTimer > 0) {
-            g2.setFont(new Font("SansSerif", Font.BOLD, 36));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 30));
             g2.setColor(new Color(120, 220, 120));
-            g2.drawString("Wave " + waveNumber + " cleared!", WIDTH / 2 - 130, HEIGHT / 2);
+            g2.drawString("Wave " + waveNumber + " cleared!", WIDTH / 2 - 130, HEIGHT / 2 - 10);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 18));
+            g2.drawString("+15 ammo, +1 MedKit", WIDTH / 2 - 85, HEIGHT / 2 + 20);
         }
 
         if (gameWon) {

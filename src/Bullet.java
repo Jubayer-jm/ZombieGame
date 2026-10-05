@@ -4,11 +4,12 @@ import java.awt.Graphics2D;
 public class Bullet {
     private double x, y;
     private final double vx, vy;
-    private final int damage = 25;
+    private final int damage;
 
-    public Bullet(double x, double y, double targetX, double targetY) {
+    public Bullet(double x, double y, double targetX, double targetY, int damage) {
         this.x = x;
         this.y = y;
+        this.damage = damage;
         double dx = targetX - x;
         double dy = targetY - y;
         double dist = Math.hypot(dx, dy);
