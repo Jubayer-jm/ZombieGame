@@ -22,6 +22,10 @@ public class GamePanel extends JPanel {
     private final int playerSize = 24;
     private final double playerSpeed = 4;
 
+    private int playerHealth = 100;
+    private int damageCooldown = 0;
+    private boolean gameOver = false;
+
     private final List<Zombie> zombies = new ArrayList<>();
     private int tickCount = 0;
 
@@ -46,6 +50,8 @@ public class GamePanel extends JPanel {
     }
 
     private void update() {
+        if (gameOver) return;
+
         movePlayer();
 
         tickCount++;
@@ -53,9 +59,21 @@ public class GamePanel extends JPanel {
             spawnZombie();
         }
 
+        if (damageCooldown > 0) damageCooldown--;
+
         for (Zombie z : zombies) {
             z.update();
             z.moveToward(playerX, playerY);
+
+            double dist = Math.hypot(z.getX() - playerX, z.getY() - playerY);
+            if (dist < 22 && damageCooldown == 0) {
+                playerHealth = Math.max(0, playerHealth - z.getDamage());
+                damageCooldown = 30;
+            }
+        }
+
+        if (playerHealth <= 0) {
+            gameOver = true;
         }
     }
 
@@ -104,5 +122,18 @@ public class GamePanel extends JPanel {
         g2.setColor(Color.WHITE);
         g2.drawString("Move: W A S D", 10, 20);
         g2.drawString("Zombies: " + zombies.size(), 10, 38);
+
+        g2.setColor(Color.DARK_GRAY);
+        g2.fillRect(10, 50, 150, 14);
+        g2.setColor(new Color(220, 50, 50));
+        g2.fillRect(10, 50, playerHealth * 150 / 100, 14);
+        g2.setColor(Color.WHITE);
+        g2.drawString("HP: " + playerHealth, 170, 62);
+
+        if (gameOver) {
+            g2.setFont(new Font("SansSerif", Font.BOLD, 48));
+            g2.setColor(Color.RED);
+            g2.drawString("GAME OVER", WIDTH / 2 - 130, HEIGHT / 2);
+        }
     }
 }
