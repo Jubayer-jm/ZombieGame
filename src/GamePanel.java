@@ -31,8 +31,13 @@ public class GamePanel extends JPanel {
 
     private final List<Zombie> zombies = new ArrayList<>();
     private final List<Bullet> bullets = new ArrayList<>();
-    private int tickCount = 0;
     private int score = 0;
+
+    private int waveNumber = 1;
+    private int walkersLeft;
+    private int runnersLeft;
+    private int spawnTimer = 0;
+    private int breakTimer = 0;
 
     public GamePanel() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -52,6 +57,8 @@ public class GamePanel extends JPanel {
             }
         });
 
+        startWave();
+
         timer = new Timer(16, e -> {
             update();
             repaint();
@@ -60,6 +67,13 @@ public class GamePanel extends JPanel {
 
     public void start() {
         timer.start();
+    }
+
+    private void startWave() {
+        Wave wave = Wave.forNumber(waveNumber);
+        walkersLeft = wave.getWalkers();
+        runnersLeft = wave.getRunners();
+        spawnTimer = 0;
     }
 
     private void shoot(double targetX, double targetY) {
@@ -72,11 +86,7 @@ public class GamePanel extends JPanel {
         if (gameOver) return;
 
         movePlayer();
-
-        tickCount++;
-        if (tickCount % 120 == 0 && zombies.size() < 10) {
-            spawnZombie();
-        }
+        updateWave();
 
         if (damageCooldown > 0) damageCooldown--;
 
@@ -99,6 +109,29 @@ public class GamePanel extends JPanel {
 
         if (playerHealth <= 0) {
             gameOver = true;
+        }
+    }
+
+    private void updateWave() {
+        if (breakTimer > 0) {
+            breakTimer--;
+            if (breakTimer == 0) {
+                waveNumber++;
+                startWave();
+            }
+            return;
+        }
+
+        int left = walkersLeft + runnersLeft;
+
+        spawnTimer++;
+        if (spawnTimer >= 60 && left > 0) {
+            spawnZombie();
+            spawnTimer = 0;
+        }
+
+        if (left == 0 && zombies.isEmpty()) {
+            breakTimer = 180;
         }
     }
 
@@ -145,17 +178,25 @@ public class GamePanel extends JPanel {
 
     private void spawnZombie() {
         double x, y;
-        switch (random.nextInt(4)) {
-            case 0:  x = random.nextInt(WIDTH); y = 0; break;
-            case 1:  x = random.nextInt(WIDTH); y = HEIGHT; break;
-            case 2:  x = 0; y = random.nextInt(HEIGHT); break;
-            default: x = WIDTH; y = random.nextInt(HEIGHT); break;
-        }
+        do {
+            switch (random.nextInt(4)) {
+                case 0:  x = random.nextInt(WIDTH - 22); y = 0; break;
+                case 1:  x = random.nextInt(WIDTH - 22); y = HEIGHT - 22; break;
+                case 2:  x = 0; y = random.nextInt(HEIGHT - 22); break;
+                default: x = WIDTH - 22; y = random.nextInt(HEIGHT - 22); break;
+            }
+        } while (Math.hypot(x - playerX, y - playerY) < 150);
 
-        if (random.nextInt(100) < 30) {
+        int left = walkersLeft + runnersLeft;
+        boolean makeRunner = runnersLeft > 0
+                && (walkersLeft == 0 || random.nextInt(left) < runnersLeft);
+
+        if (makeRunner) {
             zombies.add(new Runner(x, y));
+            runnersLeft--;
         } else {
             zombies.add(new Walker(x, y));
+            walkersLeft--;
         }
     }
 
@@ -177,7 +218,8 @@ public class GamePanel extends JPanel {
 
         g2.setColor(Color.WHITE);
         g2.drawString("Move: W A S D   Shoot: mouse click", 10, 20);
-        g2.drawString("Zombies: " + zombies.size() + "   Score: " + score, 10, 38);
+        g2.drawString("Wave: " + waveNumber + "   Zombies: " + zombies.size()
+                + "   Score: " + score, 10, 38);
 
         g2.setColor(Color.DARK_GRAY);
         g2.fillRect(10, 50, 150, 14);
@@ -185,6 +227,12 @@ public class GamePanel extends JPanel {
         g2.fillRect(10, 50, playerHealth * 150 / 100, 14);
         g2.setColor(Color.WHITE);
         g2.drawString("HP: " + playerHealth, 170, 62);
+
+        if (breakTimer > 0) {
+            g2.setFont(new Font("SansSerif", Font.BOLD, 36));
+            g2.setColor(new Color(120, 220, 120));
+            g2.drawString("Wave " + waveNumber + " cleared!", WIDTH / 2 - 130, HEIGHT / 2);
+        }
 
         if (gameOver) {
             g2.setFont(new Font("SansSerif", Font.BOLD, 48));
