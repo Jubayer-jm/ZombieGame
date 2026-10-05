@@ -22,5 +22,9 @@ public abstract class Zombie extends Entity {
         return damage;
     }
 
+    public int getSize() {
+        return 22;
+    }
+
     public abstract void draw(Graphics2D g);
 }

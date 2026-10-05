@@ -28,6 +28,7 @@ public class GamePanel extends JPanel {
     private int playerHealth = 100;
     private int damageCooldown = 0;
     private boolean gameOver = false;
+    private boolean gameWon = false;
 
     private final List<Zombie> zombies = new ArrayList<>();
     private final List<Bullet> bullets = new ArrayList<>();
@@ -36,6 +37,7 @@ public class GamePanel extends JPanel {
     private int waveNumber = 1;
     private int walkersLeft;
     private int runnersLeft;
+    private int bossesLeft;
     private int spawnTimer = 0;
     private int breakTimer = 0;
 
@@ -51,7 +53,7 @@ public class GamePanel extends JPanel {
 
         addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
-                if (!gameOver) {
+                if (!gameOver && !gameWon) {
                     shoot(e.getX(), e.getY());
                 }
             }
@@ -73,6 +75,7 @@ public class GamePanel extends JPanel {
         Wave wave = Wave.forNumber(waveNumber);
         walkersLeft = wave.getWalkers();
         runnersLeft = wave.getRunners();
+        bossesLeft = wave.getBosses();
         spawnTimer = 0;
     }
 
@@ -83,7 +86,7 @@ public class GamePanel extends JPanel {
     }
 
     private void update() {
-        if (gameOver) return;
+        if (gameOver || gameWon) return;
 
         movePlayer();
         updateWave();
@@ -94,8 +97,13 @@ public class GamePanel extends JPanel {
             z.update();
             z.moveToward(playerX, playerY);
 
-            double dist = Math.hypot(z.getX() - playerX, z.getY() - playerY);
-            if (dist < 22 && damageCooldown == 0) {
+            double zx = z.getX() + z.getSize() / 2.0;
+            double zy = z.getY() + z.getSize() / 2.0;
+            double px = playerX + playerSize / 2.0;
+            double py = playerY + playerSize / 2.0;
+            double touchDist = (z.getSize() + playerSize) / 2.0;
+
+            if (Math.hypot(zx - px, zy - py) < touchDist && damageCooldown == 0) {
                 playerHealth = Math.max(0, playerHealth - z.getDamage());
                 damageCooldown = 30;
             }
@@ -122,7 +130,7 @@ public class GamePanel extends JPanel {
             return;
         }
 
-        int left = walkersLeft + runnersLeft;
+        int left = walkersLeft + runnersLeft + bossesLeft;
 
         spawnTimer++;
         if (spawnTimer >= 60 && left > 0) {
@@ -131,7 +139,11 @@ public class GamePanel extends JPanel {
         }
 
         if (left == 0 && zombies.isEmpty()) {
-            breakTimer = 180;
+            if (waveNumber >= Wave.FINAL_WAVE) {
+                gameWon = true;
+            } else {
+                breakTimer = 180;
+            }
         }
     }
 
@@ -147,7 +159,8 @@ public class GamePanel extends JPanel {
             }
 
             for (Zombie z : zombies) {
-                Rectangle zombieBox = new Rectangle((int) z.getX(), (int) z.getY(), 22, 22);
+                Rectangle zombieBox = new Rectangle(
+                        (int) z.getX(), (int) z.getY(), z.getSize(), z.getSize());
                 if (zombieBox.contains(b.getX(), b.getY())) {
                     z.takeDamage(b.getDamage());
                     it.remove();
@@ -180,23 +193,28 @@ public class GamePanel extends JPanel {
         double x, y;
         do {
             switch (random.nextInt(4)) {
-                case 0:  x = random.nextInt(WIDTH - 22); y = 0; break;
-                case 1:  x = random.nextInt(WIDTH - 22); y = HEIGHT - 22; break;
-                case 2:  x = 0; y = random.nextInt(HEIGHT - 22); break;
-                default: x = WIDTH - 22; y = random.nextInt(HEIGHT - 22); break;
+                case 0:  x = random.nextInt(WIDTH - 50); y = 0; break;
+                case 1:  x = random.nextInt(WIDTH - 50); y = HEIGHT - 50; break;
+                case 2:  x = 0; y = random.nextInt(HEIGHT - 50); break;
+                default: x = WIDTH - 50; y = random.nextInt(HEIGHT - 50); break;
             }
         } while (Math.hypot(x - playerX, y - playerY) < 150);
 
-        int left = walkersLeft + runnersLeft;
-        boolean makeRunner = runnersLeft > 0
-                && (walkersLeft == 0 || random.nextInt(left) < runnersLeft);
+        int normalLeft = walkersLeft + runnersLeft;
 
-        if (makeRunner) {
-            zombies.add(new Runner(x, y));
-            runnersLeft--;
+        if (normalLeft > 0) {
+            boolean makeRunner = runnersLeft > 0
+                    && (walkersLeft == 0 || random.nextInt(normalLeft) < runnersLeft);
+            if (makeRunner) {
+                zombies.add(new Runner(x, y));
+                runnersLeft--;
+            } else {
+                zombies.add(new Walker(x, y));
+                walkersLeft--;
+            }
         } else {
-            zombies.add(new Walker(x, y));
-            walkersLeft--;
+            zombies.add(new Boss(x, y));
+            bossesLeft--;
         }
     }
 
@@ -218,7 +236,10 @@ public class GamePanel extends JPanel {
 
         g2.setColor(Color.WHITE);
         g2.drawString("Move: W A S D   Shoot: mouse click", 10, 20);
-        g2.drawString("Wave: " + waveNumber + "   Zombies: " + zombies.size()
+
+        String waveText = "Wave: " + waveNumber;
+        if (waveNumber >= Wave.FINAL_WAVE) waveText += " (BOSS WAVE)";
+        g2.drawString(waveText + "   Zombies: " + zombies.size()
                 + "   Score: " + score, 10, 38);
 
         g2.setColor(Color.DARK_GRAY);
@@ -232,6 +253,15 @@ public class GamePanel extends JPanel {
             g2.setFont(new Font("SansSerif", Font.BOLD, 36));
             g2.setColor(new Color(120, 220, 120));
             g2.drawString("Wave " + waveNumber + " cleared!", WIDTH / 2 - 130, HEIGHT / 2);
+        }
+
+        if (gameWon) {
+            g2.setFont(new Font("SansSerif", Font.BOLD, 56));
+            g2.setColor(new Color(255, 215, 0));
+            g2.drawString("YOU WIN!", WIDTH / 2 - 120, HEIGHT / 2);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 22));
+            g2.setColor(Color.WHITE);
+            g2.drawString("Final score: " + score, WIDTH / 2 - 70, HEIGHT / 2 + 40);
         }
 
         if (gameOver) {
