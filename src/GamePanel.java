@@ -151,7 +151,12 @@ public class GamePanel extends JPanel {
             case 2:  x = 0; y = random.nextInt(HEIGHT); break;
             default: x = WIDTH; y = random.nextInt(HEIGHT); break;
         }
-        zombies.add(new Walker(x, y));
+
+        if (random.nextInt(100) < 30) {
+            zombies.add(new Runner(x, y));
+        } else {
+            zombies.add(new Walker(x, y));
+        }
     }
 
     @Override
