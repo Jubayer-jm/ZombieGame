@@ -16,6 +16,7 @@ public class GamePanel extends JPanel {
     public static final int WIDTH = 800;
     public static final int HEIGHT = 600;
     private static final int MAX_HEALTH = 100;
+    private static final int START_BARRICADES = 3;
 
     private final Set<Integer> keysDown = new HashSet<>();
     private final Timer timer;
@@ -29,6 +30,7 @@ public class GamePanel extends JPanel {
     private int playerHealth = MAX_HEALTH;
     private int damageCooldown = 0;
     private int shootCooldown = 0;
+    private int barricadeHitTimer = 0;
     private boolean gameStarted = false;
     private boolean gameOver = false;
     private boolean gameWon = false;
@@ -37,6 +39,8 @@ public class GamePanel extends JPanel {
 
     private final List<Zombie> zombies = new ArrayList<>();
     private final List<Bullet> bullets = new ArrayList<>();
+    private final List<Barricade> barricades = new ArrayList<>();
+    private int barricadesLeft = START_BARRICADES;
     private int score = 0;
 
     private int waveNumber = 1;
@@ -68,6 +72,7 @@ public class GamePanel extends JPanel {
                 if (firstPress && !gameOver && !gameWon) {
                     if (code == KeyEvent.VK_E) inventory.nextWeapon();
                     if (code == KeyEvent.VK_H) useMedKit();
+                    if (code == KeyEvent.VK_B) placeBarricade();
                 }
                 if (firstPress && (gameOver || gameWon) && code == KeyEvent.VK_R) {
                     restartGame();
@@ -106,10 +111,13 @@ public class GamePanel extends JPanel {
         playerHealth = MAX_HEALTH;
         damageCooldown = 0;
         shootCooldown = 0;
+        barricadeHitTimer = 0;
         gameOver = false;
         gameWon = false;
         zombies.clear();
         bullets.clear();
+        barricades.clear();
+        barricadesLeft = START_BARRICADES;
         score = 0;
         waveNumber = 1;
         breakTimer = 0;
@@ -150,11 +158,20 @@ public class GamePanel extends JPanel {
         }
     }
 
+    private void placeBarricade() {
+        if (barricadesLeft <= 0) return;
+        int bx = (int) (playerX + playerSize / 2.0 - 28);
+        int by = (int) (playerY + playerSize / 2.0 - 8);
+        barricades.add(new Barricade(bx, by));
+        barricadesLeft--;
+    }
+
     private void giveWaveReward() {
         for (Weapon w : inventory.getWeapons()) {
             w.addAmmo(15);
         }
         inventory.add(new MedKit(40));
+        barricadesLeft++;
     }
 
     private void update() {
@@ -166,9 +183,26 @@ public class GamePanel extends JPanel {
         if (damageCooldown > 0) damageCooldown--;
         if (shootCooldown > 0) shootCooldown--;
 
+        barricadeHitTimer++;
+        boolean attackTick = barricadeHitTimer >= 30;
+        if (attackTick) barricadeHitTimer = 0;
+
         for (Zombie z : zombies) {
+            double oldX = z.getX();
+            double oldY = z.getY();
+
             z.update();
             z.moveToward(playerX, playerY);
+
+            for (Barricade b : barricades) {
+                if (z.getBounds().intersects(b.getBounds())) {
+                    z.setPosition(oldX, oldY);
+                    if (attackTick) {
+                        b.takeDamage(z.getDamage());
+                    }
+                    break;
+                }
+            }
 
             double zx = z.getX() + z.getSize() / 2.0;
             double zy = z.getY() + z.getSize() / 2.0;
@@ -181,6 +215,8 @@ public class GamePanel extends JPanel {
                 damageCooldown = 30;
             }
         }
+
+        barricades.removeIf(Barricade::isDestroyed);
 
         updateBullets();
 
@@ -233,9 +269,7 @@ public class GamePanel extends JPanel {
             }
 
             for (Zombie z : zombies) {
-                Rectangle zombieBox = new Rectangle(
-                        (int) z.getX(), (int) z.getY(), z.getSize(), z.getSize());
-                if (zombieBox.contains(b.getX(), b.getY())) {
+                if (z.getBounds().contains(b.getX(), b.getY())) {
                     z.takeDamage(b.getDamage());
                     it.remove();
                     break;
@@ -295,20 +329,21 @@ public class GamePanel extends JPanel {
     private void drawMenu(Graphics2D g2) {
         g2.setFont(new Font("SansSerif", Font.BOLD, 56));
         g2.setColor(new Color(120, 220, 120));
-        g2.drawString("ZOMBIE SURVIVAL", WIDTH / 2 - 700 / 2 + 110, 200);
+        g2.drawString("ZOMBIE SURVIVAL", WIDTH / 2 - 700 / 2 + 110, 190);
 
         g2.setFont(new Font("SansSerif", Font.PLAIN, 18));
         g2.setColor(Color.WHITE);
-        g2.drawString("Survive 5 waves and defeat the Boss", WIDTH / 2 - 135, 250);
+        g2.drawString("Survive 5 waves and defeat the Boss", WIDTH / 2 - 135, 240);
 
-        g2.drawString("Move: W A S D", WIDTH / 2 - 60, 320);
-        g2.drawString("Shoot: mouse click", WIDTH / 2 - 70, 350);
-        g2.drawString("Switch weapon: E", WIDTH / 2 - 70, 380);
-        g2.drawString("Heal: H", WIDTH / 2 - 30, 410);
+        g2.drawString("Move: W A S D", WIDTH / 2 - 60, 305);
+        g2.drawString("Shoot: mouse click", WIDTH / 2 - 70, 335);
+        g2.drawString("Switch weapon: E", WIDTH / 2 - 70, 365);
+        g2.drawString("Heal: H", WIDTH / 2 - 30, 395);
+        g2.drawString("Place barricade: B", WIDTH / 2 - 75, 425);
 
         g2.setFont(new Font("SansSerif", Font.BOLD, 26));
         g2.setColor(Color.YELLOW);
-        g2.drawString("Press ENTER to start", WIDTH / 2 - 135, 490);
+        g2.drawString("Press ENTER to start", WIDTH / 2 - 135, 495);
     }
 
     @Override
@@ -319,6 +354,10 @@ public class GamePanel extends JPanel {
         if (!gameStarted) {
             drawMenu(g2);
             return;
+        }
+
+        for (Barricade b : barricades) {
+            b.draw(g2);
         }
 
         for (Zombie z : zombies) {
@@ -334,7 +373,7 @@ public class GamePanel extends JPanel {
 
         g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
         g2.setColor(Color.WHITE);
-        g2.drawString("Move: WASD   Shoot: click   Switch weapon: E   Heal: H", 10, 20);
+        g2.drawString("Move: WASD   Shoot: click   Weapon: E   Heal: H   Barricade: B", 10, 20);
 
         String waveText = "Wave: " + waveNumber;
         if (waveNumber >= Wave.FINAL_WAVE) waveText += " (BOSS WAVE)";
@@ -354,14 +393,15 @@ public class GamePanel extends JPanel {
             if (!weapon.hasAmmo()) ammoText += "  (EMPTY - press E)";
             g2.drawString(ammoText, 10, 82);
         }
-        g2.drawString("MedKits: " + inventory.getMedKitCount(), 10, 100);
+        g2.drawString("MedKits: " + inventory.getMedKitCount()
+                + "   Barricades: " + barricadesLeft, 10, 100);
 
         if (breakTimer > 0) {
             g2.setFont(new Font("SansSerif", Font.BOLD, 30));
             g2.setColor(new Color(120, 220, 120));
             g2.drawString("Wave " + waveNumber + " cleared!", WIDTH / 2 - 130, HEIGHT / 2 - 10);
             g2.setFont(new Font("SansSerif", Font.PLAIN, 18));
-            g2.drawString("+15 ammo, +1 MedKit", WIDTH / 2 - 85, HEIGHT / 2 + 20);
+            g2.drawString("+15 ammo, +1 MedKit, +1 Barricade", WIDTH / 2 - 130, HEIGHT / 2 + 20);
         }
 
         if (gameWon) {

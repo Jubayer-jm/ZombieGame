@@ -1,4 +1,5 @@
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 
 public abstract class Zombie extends Entity {
     protected int damage;
@@ -16,6 +17,15 @@ public abstract class Zombie extends Entity {
             x += speed * dx / dist;
             y += speed * dy / dist;
         }
+    }
+
+    public void setPosition(double newX, double newY) {
+        this.x = newX;
+        this.y = newY;
+    }
+
+    public Rectangle getBounds() {
+        return new Rectangle((int) x, (int) y, getSize(), getSize());
     }
 
     public int getDamage() {
