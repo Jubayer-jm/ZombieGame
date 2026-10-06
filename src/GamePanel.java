@@ -29,6 +29,7 @@ public class GamePanel extends JPanel {
     private int playerHealth = MAX_HEALTH;
     private int damageCooldown = 0;
     private int shootCooldown = 0;
+    private boolean gameStarted = false;
     private boolean gameOver = false;
     private boolean gameWon = false;
 
@@ -56,6 +57,14 @@ public class GamePanel extends JPanel {
             @Override public void keyPressed(KeyEvent e) {
                 int code = e.getKeyCode();
                 boolean firstPress = keysDown.add(code);
+
+                if (!gameStarted) {
+                    if (firstPress && code == KeyEvent.VK_ENTER) {
+                        gameStarted = true;
+                    }
+                    return;
+                }
+
                 if (firstPress && !gameOver && !gameWon) {
                     if (code == KeyEvent.VK_E) inventory.nextWeapon();
                     if (code == KeyEvent.VK_H) useMedKit();
@@ -69,7 +78,7 @@ public class GamePanel extends JPanel {
 
         addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
-                if (!gameOver && !gameWon) {
+                if (gameStarted && !gameOver && !gameWon) {
                     shoot(e.getX(), e.getY());
                 }
             }
@@ -149,7 +158,7 @@ public class GamePanel extends JPanel {
     }
 
     private void update() {
-        if (gameOver || gameWon) return;
+        if (!gameStarted || gameOver || gameWon) return;
 
         movePlayer();
         updateWave();
@@ -283,10 +292,34 @@ public class GamePanel extends JPanel {
         }
     }
 
+    private void drawMenu(Graphics2D g2) {
+        g2.setFont(new Font("SansSerif", Font.BOLD, 56));
+        g2.setColor(new Color(120, 220, 120));
+        g2.drawString("ZOMBIE SURVIVAL", WIDTH / 2 - 700 / 2 + 110, 200);
+
+        g2.setFont(new Font("SansSerif", Font.PLAIN, 18));
+        g2.setColor(Color.WHITE);
+        g2.drawString("Survive 5 waves and defeat the Boss", WIDTH / 2 - 135, 250);
+
+        g2.drawString("Move: W A S D", WIDTH / 2 - 60, 320);
+        g2.drawString("Shoot: mouse click", WIDTH / 2 - 70, 350);
+        g2.drawString("Switch weapon: E", WIDTH / 2 - 70, 380);
+        g2.drawString("Heal: H", WIDTH / 2 - 30, 410);
+
+        g2.setFont(new Font("SansSerif", Font.BOLD, 26));
+        g2.setColor(Color.YELLOW);
+        g2.drawString("Press ENTER to start", WIDTH / 2 - 135, 490);
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
+
+        if (!gameStarted) {
+            drawMenu(g2);
+            return;
+        }
 
         for (Zombie z : zombies) {
             z.draw(g2);
